@@ -9,82 +9,61 @@ import { TodoStateEnum } from "./types/enums.ts";
 import { TodoBackend } from "./logic/backend.ts";
 import { LocalFileBackend } from "./logic/backends/local-file-backend.ts";
 import { WebDavBackend } from "./logic/backends/webdav-backend.ts";
-
-// Configuration Interface
-interface TodoTuiConfig {
-  backend: "local" | "webdav";
-  local?: {
-    filename: string;
-  };
-  webdav?: {
-    url: string;
-    username?: string;
-    password?: string;
-  };
-}
-
-async function loadConfig(): Promise<TodoTuiConfig> {
-  try {
-    const text = await Deno.readTextFile("todotui-config.json");
-    return JSON.parse(text) as TodoTuiConfig;
-  } catch (error) {
-    if (error instanceof Deno.errors.NotFound) {
-      console.log("Config file not found, defaulting to local 'todo.txt'");
-      return {
-        backend: "local",
-        local: { filename: "todo.txt" },
-      };
-    }
-    throw error;
-  }
-}
+import { loadConfig, TodoTuiConfig } from "./logic/config.ts";
 
 function createBackend(config: TodoTuiConfig): TodoBackend {
-  if (config.backend === "webdav") {
-    if (!config.webdav || !config.webdav.url) {
-      throw new Error("WebDAV configuration missing URL");
-    }
-    return new WebDavBackend(
-      config.webdav.url,
-      config.webdav.username,
-      config.webdav.password
-    );
-  } else {
-    // Default to local
-    const filename = config.local?.filename || "todo.txt";
-    return new LocalFileBackend(filename);
+  switch (config.backend) {
+    case "webdav":
+      return new WebDavBackend(
+        config.webdav.url,
+        config.webdav.username,
+        config.webdav.password
+      );
+    case "local":
+      return new LocalFileBackend(config.local.filename);
   }
 }
 
 async function createTodoServer() {
-  const config = await loadConfig();
-  const backend = await createBackend(config);
+  let config: TodoTuiConfig;
+  try {
+    config = await loadConfig();
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error("❌ Configuration Error in todotui-config.json:");
+      error.issues.forEach((issue) => {
+        console.error(`  - ${issue.path.join(".")}: ${issue.message}`);
+      });
+      Deno.exit(1);
+    } else if (error instanceof SyntaxError) {
+      console.error("❌ Configuration Error: todotui-config.json is not valid JSON.");
+      console.error(`  ${error.message}`);
+      Deno.exit(1);
+    }
+    throw error;
+  }
+  const backend = createBackend(config);
 
   const server = new McpServer({
     name: "TodoTui",
     version: "1.0.0",
   });
 
-  // Helper to get todos
-  async function getTodos() {
-    return await backend.load();
-  }
-
-  // Helper to save todos
-  async function saveTodos(todos: Todo[]) {
-    await backend.save(todos);
-  }
 
   // Tool: list_todos
   server.tool("list_todos", {}, async () => {
-    const todos = await getTodos();
+    const todos = await backend.load();
+    const todoStrings = await Promise.all(
+      todos.map(async (todo) => {
+        const hash = await todo.getHash();
+        return `[${hash}] ${todo.toString()}`;
+      })
+    );
     return {
       content: [
         {
           type: "text",
-          text: todos
-            .map((todo, index) => `[${index}] ${todo.toString()}`)
-            .join("\n"),
+          text: todoStrings.join("\n"),
         },
       ],
     };
@@ -98,18 +77,18 @@ async function createTodoServer() {
       text: z.string().describe("The todo text, supports todo.txt format"),
     } as any,
     async ({ text }: { text: string }) => {
-      const todos = await getTodos();
+      const todos = await backend.load();
       const newTodo = new Todo(text);
       if (!newTodo.creationDate) {
         newTodo.creationDate = new Date();
       }
       todos.push(newTodo);
-      await saveTodos(todos);
+      await backend.save(todos);
       return {
         content: [
           {
             type: "text",
-            text: `Added todo: ${newTodo.toString()}`,
+            text: `Added todo [${await newTodo.getHash()}]: ${newTodo.toString()}`,
           },
         ],
       };
@@ -121,25 +100,33 @@ async function createTodoServer() {
   server.tool(
     "edit_todo",
     {
-      index: z.number().describe("Index of the todo to edit"),
+      hash: z.string().describe("Hash of the todo to edit"),
       text: z.string().describe("New text for the todo"),
     } as any,
-    async ({ index, text }: { index: number; text: string }) => {
-      const todos = await getTodos();
-      if (index < 0 || index >= todos.length) {
+    async ({ hash, text }: { hash: string; text: string }) => {
+      const todos = await backend.load();
+      let foundIndex = -1;
+      for (let i = 0; i < todos.length; i++) {
+        if ((await todos[i].getHash()) === hash) {
+          foundIndex = i;
+          break;
+        }
+      }
+
+      if (foundIndex === -1) {
         return {
           isError: true,
-          content: [{ type: "text", text: "Index out of bounds" }],
+          content: [{ type: "text", text: "Todo not found (file modified?)" }],
         };
       }
-      const todo = todos[index];
+      const todo = todos[foundIndex];
       todo.setText(text);
-      await saveTodos(todos);
+      await backend.save(todos);
       return {
         content: [
           {
             type: "text",
-            text: `Edited todo [${index}]: ${todo.toString()}`,
+            text: `Edited todo [${await todo.getHash()}]: ${todo.toString()}`,
           },
         ],
       };
@@ -151,26 +138,34 @@ async function createTodoServer() {
   server.tool(
     "mark_done",
     {
-      index: z.number().describe("Index of the todo to mark as done"),
+      hash: z.string().describe("Hash of the todo to mark as done"),
     } as any,
-    async ({ index }: { index: number }) => {
-      const todos = await getTodos();
-      if (index < 0 || index >= todos.length) {
+    async ({ hash }: { hash: string }) => {
+      const todos = await backend.load();
+      let foundIndex = -1;
+      for (let i = 0; i < todos.length; i++) {
+        if ((await todos[i].getHash()) === hash) {
+          foundIndex = i;
+          break;
+        }
+      }
+
+      if (foundIndex === -1) {
         return {
           isError: true,
-          content: [{ type: "text", text: "Index out of bounds" }],
+          content: [{ type: "text", text: "Todo not found (file modified?)" }],
         };
       }
-      const todo = todos[index];
+      const todo = todos[foundIndex];
       if (todo.state !== TodoStateEnum.done) {
         todo.toggleState();
-        await saveTodos(todos);
+        await backend.save(todos);
       }
       return {
         content: [
           {
             type: "text",
-            text: `Marked todo [${index}] as done: ${todo.toString()}`,
+            text: `Marked todo [${await todo.getHash()}] as done: ${todo.toString()}`,
           },
         ],
       };
@@ -182,26 +177,34 @@ async function createTodoServer() {
   server.tool(
     "mark_todo",
     {
-      index: z.number().describe("Index of the todo to mark as not done (active)"),
+      hash: z.string().describe("Hash of the todo to mark as not done (active)"),
     } as any,
-    async ({ index }: { index: number }) => {
-      const todos = await getTodos();
-      if (index < 0 || index >= todos.length) {
+    async ({ hash }: { hash: string }) => {
+      const todos = await backend.load();
+      let foundIndex = -1;
+      for (let i = 0; i < todos.length; i++) {
+        if ((await todos[i].getHash()) === hash) {
+          foundIndex = i;
+          break;
+        }
+      }
+
+      if (foundIndex === -1) {
         return {
           isError: true,
-          content: [{ type: "text", text: "Index out of bounds" }],
+          content: [{ type: "text", text: "Todo not found (file modified?)" }],
         };
       }
-      const todo = todos[index];
+      const todo = todos[foundIndex];
       if (todo.state === TodoStateEnum.done) {
         todo.toggleState();
-        await saveTodos(todos);
+        await backend.save(todos);
       }
       return {
         content: [
           {
             type: "text",
-            text: `Marked todo [${index}] as todo: ${todo.toString()}`,
+            text: `Marked todo [${await todo.getHash()}] as todo: ${todo.toString()}`,
           },
         ],
       };
@@ -233,7 +236,7 @@ app.post('/mcp', async (req: any, res: any) => {
     await transport.handleRequest(req, res, req.body);
 });
 
-const port = 3000;
+const port = parseInt(Deno.env.get("PORT") || "3000");
 app.listen(port,  () => {
   console.log(`TodoTui MCP Server running on http://localhost:${port}`);
   console.log(`MCP Endpoint: http://localhost:${port}/mcp`);
