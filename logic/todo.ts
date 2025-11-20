@@ -97,6 +97,19 @@ export class Todo {
       (Object.keys(this.tags).length > 0 ? " " : "") +
       (Object.keys(this.tags).map((k) => k + ":" + this.tags[k]).join(" "));
   }
+
+  toDisplayString() {
+    return (this.isDone() ? "x " : "") +
+      (this.priority ? `(${this.priority}) ` : "") +
+      // Creation date is intentionally omitted
+      (this.completionDate
+        ? this.completionDate!.toISOString().substring(0, 10) + " "
+        : "") +
+      this.text +
+      (Object.keys(this.tags).length > 0 ? " " : "") +
+      (Object.keys(this.tags).map((k) => k + ":" + this.tags[k]).join(" "));
+  }
+
   setPriority(key: UpperCaseLetter) {
     this.priority = key;
   }

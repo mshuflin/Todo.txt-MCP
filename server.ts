@@ -56,8 +56,9 @@ async function createTodoServer() {
     const todoStrings = await Promise.all(
       todos.map(async (todo) => {
         const hash = await todo.getHash();
-        return `[${hash}] ${todo.toString()}`;
+        return `[${hash}] ${todo.toDisplayString()}`;
       })
+
     );
     return {
       content: [
@@ -88,7 +89,7 @@ async function createTodoServer() {
         content: [
           {
             type: "text",
-            text: `Added todo [${await newTodo.getHash()}]: ${newTodo.toString()}`,
+            text: `Added todo [${await newTodo.getHash()}]: ${newTodo.toDisplayString()}`,
           },
         ],
       };
@@ -126,7 +127,7 @@ async function createTodoServer() {
         content: [
           {
             type: "text",
-            text: `Edited todo [${await todo.getHash()}]: ${todo.toString()}`,
+            text: `Edited todo [${await todo.getHash()}]: ${todo.toDisplayString()}`,
           },
         ],
       };
@@ -165,7 +166,7 @@ async function createTodoServer() {
         content: [
           {
             type: "text",
-            text: `Marked todo [${await todo.getHash()}] as done: ${todo.toString()}`,
+            text: `Marked todo [${await todo.getHash()}] as done: ${todo.toDisplayString()}`,
           },
         ],
       };
@@ -204,7 +205,7 @@ async function createTodoServer() {
         content: [
           {
             type: "text",
-            text: `Marked todo [${await todo.getHash()}] as todo: ${todo.toString()}`,
+            text: `Marked todo [${await todo.getHash()}] as todo: ${todo.toDisplayString()}`,
           },
         ],
       };
