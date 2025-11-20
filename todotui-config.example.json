@@ -1,0 +1,11 @@
+{
+  "backend": "local",
+  "local": {
+    "filename": "todo.txt"
+  },
+  "webdav": {
+    "url":"",
+    "username": "",
+    "password": ""
+  }
+}

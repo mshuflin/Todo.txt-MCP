@@ -4,21 +4,62 @@ import { StreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk/ser
 import express from "npm:express";
 import cors from "npm:cors";
 
-import {
-  readTodosFromFile,
-  writeTodosToFile,
-} from "./logic/todo-file-helpers.ts";
 import { Todo } from "./logic/todo.ts";
 import { TodoStateEnum } from "./types/enums.ts";
+import { TodoBackend } from "./logic/backend.ts";
+import { LocalFileBackend } from "./logic/backends/local-file-backend.ts";
+import { WebDavBackend } from "./logic/backends/webdav-backend.ts";
 
-if (Deno.args.length < 1) {
-  console.error("Please provide a filename as an argument.");
-  Deno.exit(1);
+// Configuration Interface
+interface TodoTuiConfig {
+  backend: "local" | "webdav";
+  local?: {
+    filename: string;
+  };
+  webdav?: {
+    url: string;
+    username?: string;
+    password?: string;
+  };
 }
 
-const filename = Deno.args[0];
+async function loadConfig(): Promise<TodoTuiConfig> {
+  try {
+    const text = await Deno.readTextFile("todotui-config.json");
+    return JSON.parse(text) as TodoTuiConfig;
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) {
+      console.log("Config file not found, defaulting to local 'todo.txt'");
+      return {
+        backend: "local",
+        local: { filename: "todo.txt" },
+      };
+    }
+    throw error;
+  }
+}
 
-function createTodoServer() {
+function createBackend(config: TodoTuiConfig): TodoBackend {
+  if (config.backend === "webdav") {
+    if (!config.webdav || !config.webdav.url) {
+      throw new Error("WebDAV configuration missing URL");
+    }
+    return new WebDavBackend(
+      config.webdav.url,
+      config.webdav.username,
+      config.webdav.password
+    );
+  } else {
+    // Default to local
+    const filename = config.local?.filename || "todo.txt";
+    return new LocalFileBackend(filename);
+  }
+}
+
+async function createTodoServer() {
+  const config = await loadConfig();
+  const backend = await createBackend(config);
+
   const server = new McpServer({
     name: "TodoTui",
     version: "1.0.0",
@@ -26,12 +67,12 @@ function createTodoServer() {
 
   // Helper to get todos
   async function getTodos() {
-    return await readTodosFromFile(filename);
+    return await backend.load();
   }
 
   // Helper to save todos
   async function saveTodos(todos: Todo[]) {
-    await writeTodosToFile(todos, filename);
+    await backend.save(todos);
   }
 
   // Tool: list_todos
@@ -50,12 +91,13 @@ function createTodoServer() {
   });
 
   // Tool: add_todo
+  // @ts-ignore: Zod version mismatch with McpServer
   server.tool(
     "add_todo",
     {
       text: z.string().describe("The todo text, supports todo.txt format"),
-    },
-    async ({ text }) => {
+    } as any,
+    async ({ text }: { text: string }) => {
       const todos = await getTodos();
       const newTodo = new Todo(text);
       if (!newTodo.creationDate) {
@@ -75,13 +117,14 @@ function createTodoServer() {
   );
 
   // Tool: edit_todo
+  // @ts-ignore: Zod version mismatch with McpServer
   server.tool(
     "edit_todo",
     {
       index: z.number().describe("Index of the todo to edit"),
       text: z.string().describe("New text for the todo"),
-    },
-    async ({ index, text }) => {
+    } as any,
+    async ({ index, text }: { index: number; text: string }) => {
       const todos = await getTodos();
       if (index < 0 || index >= todos.length) {
         return {
@@ -104,12 +147,13 @@ function createTodoServer() {
   );
 
   // Tool: mark_done
+  // @ts-ignore: Zod version mismatch with McpServer
   server.tool(
     "mark_done",
     {
       index: z.number().describe("Index of the todo to mark as done"),
-    },
-    async ({ index }) => {
+    } as any,
+    async ({ index }: { index: number }) => {
       const todos = await getTodos();
       if (index < 0 || index >= todos.length) {
         return {
@@ -134,12 +178,13 @@ function createTodoServer() {
   );
 
   // Tool: mark_todo
+  // @ts-ignore: Zod version mismatch with McpServer
   server.tool(
     "mark_todo",
     {
       index: z.number().describe("Index of the todo to mark as not done (active)"),
-    },
-    async ({ index }) => {
+    } as any,
+    async ({ index }: { index: number }) => {
       const todos = await getTodos();
       if (index < 0 || index >= todos.length) {
         return {
@@ -167,13 +212,13 @@ function createTodoServer() {
 }
 
 // Global server and transport
-const server: McpServer = createTodoServer();
+const server = await createTodoServer();
 
 // Start the server
 const app = express();
 app.use(cors());
 
-app.post('/mcp', async (req, res) => {
+app.post('/mcp', async (req: any, res: any) => {
     // Create a new transport for each request to prevent request ID collisions
     const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
