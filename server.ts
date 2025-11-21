@@ -52,7 +52,7 @@ async function createTodoServer() {
   // Register a prompt describing the todo.txt format
   server.registerPrompt(
     "todo_format",
-    "The todo.txt format includes tags (e.g., @home), contexts (e.g., +project), recurrence rec:+2w (e.g., "every 2 weeks"), and the 'x' marker indicating a completed task."
+    "The todo.txt format includes tags (e.g., @home), contexts (e.g., +project), recurrence rec:+2w (e.g., 'every 2 weeks'), and the 'x' marker indicating a completed task."
   );
 
 
@@ -76,8 +76,6 @@ async function createTodoServer() {
       ],
     };
   });
-
-  server.
 
   // Tool: add_todo
   // @ts-ignore: Zod version mismatch with McpServer

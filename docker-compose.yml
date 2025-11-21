@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
   todo-txt-mcp:
     build: .
     ports:
-      - "3000:5000"
+      - "6000:3000"
     volumes:
       - ./todo.txt:/app/todo.txt
     environment:
