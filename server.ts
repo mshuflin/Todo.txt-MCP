@@ -49,6 +49,13 @@ async function createTodoServer() {
     version: "1.0.0",
   });
 
+  // Register a prompt describing the todo.txt format
+  server.registerPrompt(
+    "todo_format",
+    "The todo.txt format includes tags (e.g., @home), contexts (e.g., +project), recurrence rec:+2w (e.g., "every 2 weeks"), and the 'x' marker indicating a completed task."
+  );
+
+
 
   // Tool: list_todos
   server.tool("list_todos", {}, async () => {
@@ -69,6 +76,8 @@ async function createTodoServer() {
       ],
     };
   });
+
+  server.
 
   // Tool: add_todo
   // @ts-ignore: Zod version mismatch with McpServer
