@@ -7,7 +7,7 @@ services:
     build: https://github.com/ArnoNuyts/Todo.txt-MCP.git
 
     ports:
-      - "5000:5000"
+      - "3000:3000"
 
     volumes:
       # Mount only the data file for persistence
