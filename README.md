@@ -1,21 +1,45 @@
-# TodoTui MCP Server
+# Todo.txt-MCP
 
-TodoTui is a Model Context Protocol (MCP) server designed to manage your todo
-list. It enables AI agents to interact with your tasks—listing, adding, editing,
-and marking them as done. It supports storage via a local `todo.txt` file or
-synchronization over WebDAV.
+Todo.txt-MCP is a Model Context Protocol (MCP) server designed to manage your
+todo.txt file. It enables AI agents to interact with your tasks—listing, adding,
+editing, and marking them as done. It supports storage via a local `todo.txt`
+file or synchronization over WebDAV.
 
 ## 🚀 Quick Start with Docker
 
 The easiest way to run TodoTui is using Docker Compose.
 
-1. **Configure**: (Optional) Edit `docker-compose.yml` to set environment
-   variables for WebDAV or change the local filename.
-2. **Run**:
+You can use the following `docker-compose.yml` configuration:
+
+```yaml
+version: "3.8"
+
+services:
+    todo-txt-mcp:
+        build: https://github.com/ArnoNuyts/Todo.txt-MCP.git
+
+        ports:
+            - "5000:5000"
+
+        volumes:
+            # Mount only the data file for persistence
+            - ./todo.txt:/app/todo.txt
+
+        environment:
+            # Configuration
+            - TODOTXT_MCP_BACKEND=local
+            - TODOTXT_MCP_LOCAL_FILENAME=todo.txt
+            # - TODOTXT_MCP_BACKEND=webdav
+            # - TODOTXT_MCP_WEBDAV_URL=https://dav.example.com
+            # - TODOTXT_MCP_WEBDAV_USERNAME=user
+            # - TODOTXT_MCP_WEBDAV_PASSWORD=pass
+```
+
+1. **Run**:
    ```bash
    docker-compose up -d
    ```
-3. **Access**: The server will be running at `http://localhost:5000`.
+2. **Access**: The server will be running at `http://localhost:5000`.
 
 ## 💻 Run Locally
 

@@ -9,9 +9,9 @@ import { TodoStateEnum } from "./types/enums.ts";
 import { TodoBackend } from "./logic/backend.ts";
 import { LocalFileBackend } from "./logic/backends/local-file-backend.ts";
 import { WebDavBackend } from "./logic/backends/webdav-backend.ts";
-import { loadConfig, TodoTuiConfig } from "./logic/config.ts";
+import { loadConfig, TodoTxtMcpConfig } from "./logic/config.ts";
 
-function createBackend(config: TodoTuiConfig): TodoBackend {
+function createBackend(config: TodoTxtMcpConfig): TodoBackend {
   switch (config.backend) {
     case "webdav":
       return new WebDavBackend(
@@ -25,18 +25,18 @@ function createBackend(config: TodoTuiConfig): TodoBackend {
 }
 
 async function createTodoServer() {
-  let config: TodoTuiConfig;
+  let config: TodoTxtMcpConfig;
   try {
     config = await loadConfig();
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error("❌ Configuration Error in todotui-config.json:");
+      console.error("❌ Configuration Error in todo.txt-mcp-config.json:");
       error.issues.forEach((issue) => {
         console.error(`  - ${issue.path.join(".")}: ${issue.message}`);
       });
       Deno.exit(1);
     } else if (error instanceof SyntaxError) {
-      console.error("❌ Configuration Error: todotui-config.json is not valid JSON.");
+      console.error("❌ Configuration Error: todo.txt-mcp-config.json is not valid JSON.");
       console.error(`  ${error.message}`);
       Deno.exit(1);
     }
@@ -45,7 +45,7 @@ async function createTodoServer() {
   const backend = createBackend(config);
 
   const server = new McpServer({
-    name: "TodoTui",
+    name: "todo.txt-mcp",
     version: "1.0.0",
   });
 
@@ -239,7 +239,7 @@ app.post('/mcp', async (req: any, res: any) => {
 
 const port = parseInt(Deno.env.get("PORT") || "3000");
 app.listen(port,  () => {
-  console.log(`TodoTui MCP Server running on http://localhost:${port}`);
+  console.log(`todo.txt-mcp Server running on http://localhost:${port}`);
   console.log(`MCP Endpoint: http://localhost:${port}/mcp`);
 });
 

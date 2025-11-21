@@ -21,14 +21,14 @@ export const ConfigSchema = z.discriminatedUnion("backend", [
   WebDavConfig,
 ]);
 
-export type TodoTuiConfig = z.infer<typeof ConfigSchema>;
+export type TodoTxtMcpConfig = z.infer<typeof ConfigSchema>;
 
-export async function loadConfig(): Promise<TodoTuiConfig> {
+export async function loadConfig(): Promise<TodoTxtMcpConfig> {
   let config: Record<string, any> = {};
 
   // 1. Try to load from file
   try {
-    const text = await Deno.readTextFile("todotui-config.json");
+    const text = await Deno.readTextFile("todo.txt-mcp-config.json");
     config = JSON.parse(text);
   } catch (error) {
     if (!(error instanceof Deno.errors.NotFound)) {
@@ -39,11 +39,11 @@ export async function loadConfig(): Promise<TodoTuiConfig> {
 
   // 2. Override with Environment Variables
   const envMapping: Record<string, string> = {
-    "TODOTUI_BACKEND": "backend",
-    "TODOTUI_LOCAL_FILENAME": "local.filename",
-    "TODOTUI_WEBDAV_URL": "webdav.url",
-    "TODOTUI_WEBDAV_USERNAME": "webdav.username",
-    "TODOTUI_WEBDAV_PASSWORD": "webdav.password",
+    "TODOTXT_MCP_BACKEND": "backend",
+    "TODOTXT_MCP_LOCAL_FILENAME": "local.filename",
+    "TODOTXT_MCP_WEBDAV_URL": "webdav.url",
+    "TODOTXT_MCP_WEBDAV_USERNAME": "webdav.username",
+    "TODOTXT_MCP_WEBDAV_PASSWORD": "webdav.password",
   };
 
   for (const [envVar, path] of Object.entries(envMapping)) {
