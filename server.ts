@@ -1,8 +1,8 @@
-import { McpServer } from "npm:@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "npm:zod@3.21.4";
-import { StreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk/server/streamableHttp.js";
-import express from "npm:express";
-import cors from "npm:cors";
+import { McpServer } from "npm:@modelcontextprotocol/sdk@1.22.0/server/mcp.js";
+import { z } from "npm:zod@3.24.1";
+import { StreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.22.0/server/streamableHttp.js";
+import express, { Request, Response } from "npm:express@5.1.0";
+import cors from "npm:cors@2.8.5";
 
 import { Todo } from "./logic/todo.ts";
 import { TodoStateEnum } from "./types/enums.ts";
@@ -52,21 +52,26 @@ async function createTodoServer() {
   // Register a prompt describing the todo.txt format
   server.registerPrompt(
     "todo_format",
-    "The todo.txt format includes tags (e.g., @home), contexts (e.g., +project), recurrence rec:+2w (e.g., 'every 2 weeks'), and the 'x' marker indicating a completed task."
+    {
+      description: "The todo.txt format includes tags (e.g., @home), contexts (e.g., +project), recurrence rec:+2w (e.g., 'every 2 weeks'), and the 'x' marker indicating a completed task.",
+    },
+    () => ({ messages: [] })
   );
 
 
-
   // Tool: list_todos
+  const ListTodosSchema = z.object({
+    status: z.enum(["todo", "done", "all"]).optional().describe("Filter by status: 'todo' (default), 'done', or 'all'"),
+    search: z.string().optional().describe("Search query to filter todos by text"),
+    limit: z.number().optional().describe("Maximum number of todos to return (default: 50)"),
+    offset: z.number().optional().describe("Number of todos to skip (default: 0)"),
+  });
+
   server.tool(
     "list_todos",
-    {
-      status: z.enum(["todo", "done", "all"]).optional().describe("Filter by status: 'todo' (default), 'done', or 'all'"),
-      search: z.string().optional().describe("Search query to filter todos by text"),
-      limit: z.number().optional().describe("Maximum number of todos to return (default: 50)"),
-      offset: z.number().optional().describe("Number of todos to skip (default: 0)"),
-    } as any,
-    async ({ status = "todo", search, limit = 50, offset = 0 }: { status?: "todo" | "done" | "all"; search?: string; limit?: number; offset?: number }) => {
+    ListTodosSchema.shape,
+    async (rawArgs: unknown) => {
+      const { status = "todo", search, limit = 50, offset = 0 } = ListTodosSchema.parse(rawArgs);
       const allTodos = await backend.load();
       
       let filteredTodos = allTodos;
@@ -96,7 +101,7 @@ async function createTodoServer() {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: todoStrings.length > 0 ? todoStrings.join("\n") : "No todos found matching criteria.",
           },
         ],
@@ -105,13 +110,15 @@ async function createTodoServer() {
   );
 
   // Tool: add_todo
-  // @ts-ignore: Zod version mismatch with McpServer
+  const AddTodoSchema = z.object({
+    text: z.string().describe("The todo text, supports todo.txt format"),
+  });
+
   server.tool(
     "add_todo",
-    {
-      text: z.string().describe("The todo text, supports todo.txt format"),
-    } as any,
-    async ({ text }: { text: string }) => {
+    AddTodoSchema.shape,
+    async (rawArgs: unknown) => {
+      const { text } = AddTodoSchema.parse(rawArgs);
       const todos = await backend.load();
       const newTodo = new Todo(text);
       if (!newTodo.creationDate) {
@@ -122,7 +129,7 @@ async function createTodoServer() {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: `Added todo [${await newTodo.getHash()}]: ${newTodo.toDisplayString()}`,
           },
         ],
@@ -131,14 +138,16 @@ async function createTodoServer() {
   );
 
   // Tool: edit_todo
-  // @ts-ignore: Zod version mismatch with McpServer
+  const EditTodoSchema = z.object({
+    hash: z.string().describe("Hash of the todo to edit"),
+    text: z.string().describe("New text for the todo"),
+  });
+
   server.tool(
     "edit_todo",
-    {
-      hash: z.string().describe("Hash of the todo to edit"),
-      text: z.string().describe("New text for the todo"),
-    } as any,
-    async ({ hash, text }: { hash: string; text: string }) => {
+    EditTodoSchema.shape,
+    async (rawArgs: unknown) => {
+      const { hash, text } = EditTodoSchema.parse(rawArgs);
       const todos = await backend.load();
       let foundIndex = -1;
       for (let i = 0; i < todos.length; i++) {
@@ -160,7 +169,7 @@ async function createTodoServer() {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: `Edited todo [${await todo.getHash()}]: ${todo.toDisplayString()}`,
           },
         ],
@@ -169,14 +178,16 @@ async function createTodoServer() {
   );
 
   // Tool: set_todo_status
-  // @ts-ignore: Zod version mismatch with McpServer
+  const SetTodoStatusSchema = z.object({
+    hash: z.string().describe("Hash of the todo to update"),
+    status: z.enum(["done", "todo"]).describe("New status for the todo ('done' or 'todo')"),
+  });
+
   server.tool(
     "set_todo_status",
-    {
-      hash: z.string().describe("Hash of the todo to update"),
-      status: z.enum(["done", "todo"]).describe("New status for the todo ('done' or 'todo')"),
-    } as any,
-    async ({ hash, status }: { hash: string; status: "done" | "todo" }) => {
+    SetTodoStatusSchema.shape,
+    async (rawArgs: unknown) => {
+      const { hash, status } = SetTodoStatusSchema.parse(rawArgs);
       const todos = await backend.load();
       let foundIndex = -1;
       for (let i = 0; i < todos.length; i++) {
@@ -205,7 +216,7 @@ async function createTodoServer() {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: `Set todo [${await todo.getHash()}] status to ${status}: ${todo.toDisplayString()}`,
           },
         ],
@@ -223,7 +234,7 @@ const server = await createTodoServer();
 const app = express();
 app.use(cors());
 
-app.post('/mcp', async (req: any, res: any) => {
+app.post('/mcp', async (req: Request, res: Response) => {
     // Create a new transport for each request to prevent request ID collisions
     const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
