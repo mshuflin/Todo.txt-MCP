@@ -1,5 +1,5 @@
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.22.0/server/mcp.js";
-import { z } from "npm:zod@3.28.0";
+import { z } from "npm:zod@3.23.0";
 import { StreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.22.0/server/streamableHttp.js";
 import express, { Request, Response } from "npm:express@5.1.0";
 import cors from "npm:cors@2.8.5";
